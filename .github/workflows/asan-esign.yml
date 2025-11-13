@@ -1,0 +1,79 @@
+name: ASan/UBSan - ESIGN memcpy verification and cryptest
+
+on:
+  push:
+    branches: [ "asan-esign-test" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  asan-esign-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CC: clang
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print toolchain versions
+        run: |
+          clang++ --version
+
+      - name: Build Crypto++ with ASan/UBSan
+        run: |
+          make -j2 \
+            CXX="${CXX}" \
+            CXXFLAGS="-std=c++17 -O1 -g -fPIC -fno-omit-frame-pointer -fsanitize=address,undefined" \
+            LDFLAGS="-fsanitize=address,undefined"
+
+      - name: Build ESIGN memcpy ASan test
+        run: |
+          mkdir -p build-tests
+          ${CXX} -std=c++17 -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
+            -I. tests/esign_memcpy_asan.cpp -o build-tests/esign_memcpy_asan \
+            ./libcryptopp.a -lpthread
+
+      - name: Run ESIGN memcpy ASan test
+        run: |
+          ./build-tests/esign_memcpy_asan
+
+  asan-cryptest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: asan-esign-test
+    env:
+      CC: clang
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:strict_string_checks=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print toolchain versions
+        run: |
+          clang++ --version
+
+      - name: Build Crypto++ with ASan/UBSan
+        run: |
+          make -j2 \
+            CXX="${CXX}" \
+            CXXFLAGS="-std=c++17 -O1 -g -fPIC -fno-omit-frame-pointer -fsanitize=address,undefined" \
+            LDFLAGS="-fsanitize=address,undefined"
+
+      - name: Build cryptest.exe with ASan/UBSan
+        run: |
+          make -j2 cryptest.exe \
+            CXX="${CXX}" \
+            CXXFLAGS="-std=c++17 -O1 -g -fPIC -fno-omit-frame-pointer -fsanitize=address,undefined" \
+            LDFLAGS="-fsanitize=address,undefined"
+
+      - name: Run cryptest validation (v)
+        run: |
+          ./cryptest.exe v
