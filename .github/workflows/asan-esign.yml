@@ -77,3 +77,49 @@ jobs:
       - name: Run cryptest validation (v)
         run: |
           ./cryptest.exe v
+
+  clang22-fortify:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/mattkretz/cplusplus-ci/clang22
+    timeout-minutes: 30
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print toolchain versions
+        run: |
+          clang++ --version
+
+      - name: Build Crypto++ with clang22 and fortify (Issue #1338)
+        run: |
+          make -j2 \
+            CXX="${CXX}" \
+            CXXFLAGS="-std=c++17 -DNDEBUG -g2 -O3 -fPIC -D_FORTIFY_SOURCE=2 -Werror=format-security" \
+            LDFLAGS=""
+
+      - name: Build ESIGN memcpy test with fortify
+        run: |
+          mkdir -p build-tests
+          ${CXX} -std=c++17 -DNDEBUG -g2 -O3 -fPIC -D_FORTIFY_SOURCE=2 -Werror=format-security \
+            -I. tests/esign_memcpy_asan.cpp -o build-tests/esign_memcpy_fortify \
+            ./libcryptopp.a -lpthread
+
+      - name: Run ESIGN memcpy test
+        run: |
+          ./build-tests/esign_memcpy_fortify
+
+      - name: Build cryptest.exe with fortify
+        run: |
+          make -j2 cryptest.exe \
+            CXX="${CXX}" \
+            CXXFLAGS="-std=c++17 -DNDEBUG -g2 -O3 -fPIC -D_FORTIFY_SOURCE=2 -Werror=format-security" \
+            LDFLAGS=""
+
+      - name: Run cryptest validation (v)
+        run: |
+          ./cryptest.exe v
